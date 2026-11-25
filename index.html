@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data sharing decision tree</title>
+<style>
+  /* Deltares palette (taken from deltares.nl) */
+  :root {
+    --navy:#141e95; --navy-dark:#0a28a3; --cyan:#00c2eb; --cyan-light:#5ed2f5; --cyan-pale:#d5f3fc;
+    --green:#00ab7f; --green-pale:#f0fcfa; --yellow:#ffd434; --red:#960505;
+    --text:#111827; --muted:#4b5563; --line:#e4e4e7; --bg:#f4f4f5;
+    --brand:var(--navy); --ok:var(--green); --stop:var(--red); --info:var(--cyan);
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:Franca, Helvetica, Arial, sans-serif; background:var(--bg); color:var(--text); }
+  header { background:var(--navy); color:#fff; padding:20px 24px; border-bottom:6px solid var(--cyan); }
+  .header-inner { max-width:860px; margin:0 auto; padding:0 16px; }
+  header .brand { font-size:.85rem; letter-spacing:.12em; text-transform:uppercase; color:var(--cyan-light); font-weight:700; }
+  header h1 { margin:2px 0 0; font-size:1.7rem; }
+  header p { margin:4px 0 0; color:var(--cyan-pale); font-size:.95rem; }
+  main { max-width:860px; margin:24px auto; padding:0 16px; display:grid; gap:20px; }
+  .card { background:#fff; border-radius:6px; padding:24px; box-shadow:0 1px 4px rgba(20,30,149,.15); }
+  .step-label { font-size:.8rem; text-transform:uppercase; letter-spacing:.08em; color:var(--navy); font-weight:700; }
+  .q-head { display:flex; align-items:flex-start; gap:12px; margin:8px 0 12px; }
+  .question { font-size:1.4rem; margin:0; color:var(--navy); flex:1; }
+  #textBody p { line-height:1.5; }
+  #textBody table { margin:0 0 20px; }
+  #textBody tr.hl td { background:var(--cyan-pale); }
+  #textBody td:first-child { font-weight:700; color:var(--navy); white-space:nowrap; }
+  .blocker-list { display:grid; gap:10px; margin:0 0 20px; }
+  .blocker { display:flex; gap:12px; align-items:flex-start; padding:12px 16px; border:1px solid var(--line); border-radius:6px; cursor:pointer; }
+  .blocker:hover { border-color:var(--cyan); }
+  .blocker.checked { border-color:var(--ok); background:var(--green-pale); }
+  .blocker input { width:20px; height:20px; margin:2px 0 0; flex:none; accent-color:var(--ok); }
+  .blocker .b-text { font-weight:600; color:var(--navy); }
+  .blocker .b-info { display:block; margin-top:4px; font-size:.9rem; color:var(--muted); font-weight:400; }
+  .intro-title { margin:8px 0 12px; }
+  #introCard p { line-height:1.5; }
+  .help { color:var(--muted); margin:0 0 20px; font-size:.95rem; }
+  .answers { display:flex; gap:12px; flex-wrap:wrap; }
+  button { font:inherit; cursor:pointer; border-radius:999px; border:2px solid var(--navy); padding:10px 32px; background:#fff; color:var(--navy); font-weight:600; transition:background .15s, color .15s; }
+  button:hover { background:var(--navy); color:#fff; }
+  button:focus-visible { outline:3px solid var(--cyan); outline-offset:2px; }
+  button.primary { background:var(--navy); color:#fff; }
+  button.primary:hover { background:var(--navy-dark); }
+  button:disabled { opacity:.4; cursor:default; background:#fff; color:var(--navy); }
+  .nav { display:flex; gap:10px; margin-top:20px; }
+  .nav button { padding:6px 18px; font-size:.9rem; border-width:1px; }
+  .progress { height:6px; background:var(--cyan-pale); border-radius:3px; margin-bottom:18px; overflow:hidden; }
+  .progress > div { height:100%; background:var(--cyan); transition:width .25s; }
+  .outcome { border-left:8px solid var(--info); }
+  .outcome.ok { border-color:var(--ok); }
+  .outcome.stop { border-color:var(--stop); }
+  .outcome h2 { margin:0 0 8px; color:var(--navy); }
+  .route h3 { margin:0 0 10px; font-size:1rem; color:var(--navy); }
+  table { width:100%; border-collapse:collapse; font-size:.92rem; }
+  th, td { text-align:left; padding:8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--navy); font-weight:700; border-bottom:1px solid var(--navy); }
+  td.ans { font-weight:700; min-width:6em; color:var(--navy); }
+  .hidden { display:none !important; }
+  .note { font-size:.85rem; color:var(--muted); margin-top:10px; }
+  #printArea { display:none; }
+
+  /* information text shown under the question */
+  .info-text { margin:0 0 20px; padding:12px 16px; background:var(--cyan-pale); border-left:4px solid var(--cyan); border-radius:4px; color:var(--text); font-size:.95rem; line-height:1.45; }
+
+  @media print {
+    body { background:#fff; }
+    header, main { display:none !important; }
+    #printArea { display:block; padding:0; font-size:11pt; }
+    * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    #printArea { font-family:Franca, Helvetica, Arial, sans-serif; }
+    #printArea .brand { font-size:9pt; letter-spacing:.12em; text-transform:uppercase; color:var(--cyan); font-weight:700; }
+    #printArea h1 { font-size:18pt; margin:0 0 2pt; color:var(--navy); border-bottom:3pt solid var(--cyan); padding-bottom:6pt; }
+    #printArea .meta { color:#555; margin:6pt 0 14pt; }
+    #printArea h2 { font-size:13pt; margin:16pt 0 6pt; color:var(--navy); }
+    #printArea tr { break-inside:avoid; }
+    #printArea th { color:var(--navy); border-bottom:1pt solid var(--navy); }
+    #printArea td.ans { color:var(--navy); }
+    #printArea .out { border-left:6pt solid var(--info); padding:6pt 10pt; background:var(--cyan-pale); }
+    #printArea .out.ok { border-color:var(--ok); }
+    #printArea .out.stop { border-color:var(--stop); }
+    @page { margin:18mm; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="header-inner">
+    <div class="brand">Deltares</div>
+    <h1>Data sharing decision tree</h1>
+    <p>Answer the questions to determine how a dataset can be published and licensed.</p>
+  </div>
+</header>
+
+<main>
+  <section class="card" id="introCard">
+    <div class="step-label">Introduction to the data sharing decision tree</div>
+    <h2 class="question intro-title">Before you start</h2>
+    <p>This decision tree guides you through a series of short questions about your dataset. Based on your answers it indicates whether and how the dataset can be shared internally or published, and under which license.</p>
+    <p>Each question comes with a short explanation. The outcome is indicative: when in doubt, consult your Data Steward.</p>
+    <div class="answers">
+      <button class="primary" id="btnStart">Continue</button>
+    </div>
+  </section>
+
+  <section class="card hidden" id="blockersCard">
+    <div class="step-label">Publication Checklist</div>
+    <h2 class="question intro-title" id="blockersTitle"></h2>
+    <p class="info-text" id="blockersIntro"></p>
+    <div class="blocker-list" id="blockerList"></div>
+    <div class="answers">
+      <button class="primary" id="btnBlockersNext">Continue</button>
+    </div>
+    <div class="nav">
+      <button class="js-back">&larr; Back</button>
+      <button class="js-restart">Restart</button>
+    </div>
+  </section>
+
+  <section class="card hidden" id="sourcesCard">
+    <div class="step-label">Source licenses</div>
+    <h2 class="question intro-title" id="sourcesTitle"></h2>
+    <p class="info-text" id="sourcesIntro"></p>
+    <div class="blocker-list" id="sourceList"></div>
+    <p class="note hidden" id="sourcesHint">Tick at least one license to continue.</p>
+    <div class="answers">
+      <button class="primary" id="btnSourcesNext">Continue</button>
+    </div>
+    <div class="nav">
+      <button class="js-back">&larr; Back</button>
+      <button class="js-restart">Restart</button>
+    </div>
+  </section>
+
+  <section class="card hidden" id="textCard">
+    <div class="step-label" id="textLabel"></div>
+    <h2 class="question intro-title" id="textTitle"></h2>
+    <div id="textBody"></div>
+    <div class="answers" id="textActions"></div>
+    <div class="nav">
+      <button class="js-back">&larr; Back</button>
+      <button class="js-restart">Restart</button>
+    </div>
+  </section>
+
+  <section class="card" id="questionCard">
+    <div class="progress"><div id="bar"></div></div>
+    <div class="step-label" id="stepLabel"></div>
+    <div class="q-head">
+      <h2 class="question" id="questionText"></h2>
+    </div>
+    <p class="info-text hidden" id="infoText"></p>
+    <div class="answers" id="answers"></div>
+    <div class="nav">
+      <button id="btnBack">&larr; Back</button>
+      <button id="btnRestart">Restart</button>
+    </div>
+  </section>
+
+  <section class="card outcome hidden" id="outcomeCard">
+    <div class="step-label">Outcome</div>
+    <h2 id="outcomeTitle"></h2>
+    <p id="outcomeText"></p>
+    <p id="outcomeLicense" class="hidden"></p>
+    <div class="nav">
+      <button class="primary" id="btnPdf">Export route as PDF</button>
+      <button id="btnBack2">&larr; Back</button>
+      <button id="btnRestart2">Restart</button>
+    </div>
+    <p class="note">The PDF export opens the print dialog: choose “Save as PDF” as the printer.</p>
+  </section>
+
+  <section class="card route hidden" id="routeCard">
+    <h3>Your route so far</h3>
+    <table>
+      <thead><tr><th>#</th><th>Question</th><th>Answer</th></tr></thead>
+      <tbody id="routeBody"></tbody>
+    </table>
+  </section>
+</main>
+
+<div id="printArea"></div>
+
+<script>
+/* ------------------------------------------------------------------
+   TREE DEFINITION - edit questions, help texts and outcomes here.
+   Each question has either "yes" and "no" targets (buttons Yes / No),
+   or an "answers" list with custom buttons, in any number:
+     answers: [ { label: "Publicly", next: "q2" }, { label: "Internally", next: "q1a" } ]
+   A target ("next", "yes", "no") is another question id or an outcome id
+   (keys of OUTCOMES).
+   Outcome types: ok (green), stop (red), info (blue).
+   NOTE: outcome texts are drafts and should be reviewed.
+------------------------------------------------------------------- */
+const QUESTIONS = {
+
+
+  q1:  { text: "Do you intend to share the dataset publicly or internally?",
+         answers: [ { label: "Publicly",   next: "p_blockers_public"  },
+                    { label: "Internally", next: "p_blockers_internal" } ] },
+
+  q3:   { text: "Is this dataset suitable for the digital services route?",
+         yes: "e_digital_services",  no: "q4" },
+
+  q4:   { text: "Can this data be used to recreate licensed Deltares software?",
+         yes: "e_software_recreate", no: "p_default_license" },
+
+  q5:  { text: "Has the intended publication and licensing approach been explicitly documented (offer / contract / DMP)?",
+         yes: "e_documented", no: "q7" },
+
+  q7:   { text: "Does the dataset include data from external sources or third parties (including partners)?",
+         yes: "q7a", no: "q8" },
+
+  q7a: { text: "Does Deltares have the permission to use the third party data?",
+         yes: "q8",  no: "e_noperm" },
+
+  q8:  { text: "Is this dataset derived from, or based on, other datasets?",
+         yes: "p_sources", no: "q9" },
+
+  q9:  { text: "Is there a reason not to require attribution when reusing the dataset?",
+         yes: "e_noattr", no: "q10" },
+
+  q10: { text: "Should reuse of the dataset be limited to its original form (i.e. no modifications or derived datasets)?",
+         yes: "q12", no: "q11" },
+
+  q11: { text: "Should derived datasets be required to be shared under the same license?",
+         yes: "q12", no: "q12" },
+
+  q12: { text: "Should reuse of the dataset be limited to non-commercial purposes?",
+         yes: "e_license", no: "e_license" }
+};
+
+/* ------------------------------------------------------------------
+   BLOCKER PAGES - a checklist page where the user ticks every statement
+   that is true (= blocker NOT present). Unticked boxes count as blockers.
+   If all boxes are ticked Continue goes to "none", otherwise the tree
+   ends at the outcome given by "some".
+   Each item: id, short (route/summary label of the blocker), text (the
+   checkbox statement), blocker (the blocker as a sentence), info
+   (explanation under the checkbox), resolve (advice for the blocker;
+   currently not shown).
+------------------------------------------------------------------- */
+const BLOCKER_PAGES = {
+  p_blockers_public: {
+    title: "Are the following conditions met for publicly sharing this dataset?",
+    intro: "Tick every statement that is true for this dataset. Leave a box unticked if the statement is not true or if you are unsure; unticked statements are treated as blockers. When in doubt, consult the Data Steward.",
+    items: [
+      { id: "restrictions", short: "Contractual, client or funder restrictions",
+        text: "There are no contractual, client, or funder restrictions on publication of this dataset.",
+        blocker: "There are contractual, client, or funder restrictions on publication of this dataset.",
+        info: "Check the offer, contract, grant agreement or consortium agreement for clauses on publication, confidentiality, embargo periods or client approval.",
+        resolve: "Ask the client or funder for permission to publish, or agree an embargo period or adapted terms. Contact your data steward if the documents are unclear." },
+      { id: "ipr", short: "No intellectual property rights",
+        text: "Deltares has the intellectual property rights over the dataset.",
+        blocker: "Deltares does not have the intellectual property rights over the dataset.",
+        info: "Deltares needs the intellectual property rights (or a licence that allows sublicensing) to publish and license the data. Consider data created by Deltares staff, commissioned work, and data owned by clients or partners.",
+        resolve: "Obtain the rights or a sublicensing permission from the rights holder, or publish only the part of the dataset Deltares owns." },
+      { id: "quality", short: "Data quality not fit for publication",
+        text: "The data quality has been checked and the dataset is acceptable for publication.",
+        blocker: "The data quality has not been checked, or the dataset is not acceptable for publication.",
+        info: "Consider whether the dataset is complete, documented (metadata), validated and free of known errors, so that others can reuse it reliably. Publishing poor-quality data can harm Deltares' reputation and its users.",
+        resolve: "Check and improve the dataset (e.g. add missing metadata, correct errors, complete the data). Consider whether this is realistic with the available time and budget." },
+      { id: "anonymity", short: "Personal, confidential or sensitive data not anonymised",
+        text: "The dataset contains no personal, confidential or sensitive data, or this data has been sufficiently anonymised.",
+        blocker: "The dataset contains personal, confidential or sensitive data that has not been sufficiently anonymised.",
+        info: "Think of personal data (GDPR), confidential business or client information, or sensitive data such as locations of vulnerable infrastructure or protected species. Sufficient anonymisation means individuals or confidential sources cannot reasonably be identified, even when the dataset is combined with other data. Apply this per dataset.",
+        resolve: "Anonymise, aggregate or remove the personal, confidential or sensitive data, or publish only the part of the dataset without it. Consult the Data Steward or privacy officer when unsure." }
+    ],
+    none: "q3", some: "e_blocked_public"
+  },
+  p_blockers_internal: {
+    title: "Are there the following conditions met for internal sharing of this dataset?",
+    intro: "Tick every statement that is true for this dataset. Leave a box unticked if the statement is not true or if you are unsure; unticked statements are treated as blockers. When in doubt, consult the Data Steward.",
+    items: [
+      { id: "restrictions", short: "Contractual, client or funder restrictions",
+        text: "There are no contractual, client, or funder restrictions on internal sharing of this dataset.",
+        blocker: "There are contractual, client, or funder restrictions on internal sharing of this dataset.",
+        info: "Check the offer, contract, grant agreement or consortium agreement for clauses on publication, confidentiality, embargo periods or client approval.",
+        resolve: "Ask the client or funder for permission to publish, or agree an embargo period or adapted terms. Contact your data steward if the documents are unclear." },
+      { id: "internal_use", short: "Not usable in approved internal projects",
+        text: "The data can be used in approved internal projects.",
+        blocker: "The data cannot be used in approved internal projects.",
+        info: "Check whether the data may be reused within approved internal projects, for example under the project agreement, client conditions or internal policy. If only some projects qualify (e.g. non-commercial ones), leave this box unticked and treat sharing as restricted.",
+        resolve: "Check the project agreement and client conditions, and ask for permission to reuse the data internally. If only some projects qualify, sharing stays restricted to those projects." }
+    ],
+    none: "e_internal_sharing", some: "e_blocked_internal"
+  }
+};
+
+/* ------------------------------------------------------------------
+   SOURCE LICENSES - the user ticks the license(s) of the source datasets.
+   The logic (see allowedLicenses) derives which licenses the new dataset
+   may use, and the later questions are restricted accordingly.
+   Flags: by, nc, sa, nd (CC conditions), cc0 (public domain dedication).
+------------------------------------------------------------------- */
+const LICENSES = [
+  { id: "cc0",     name: "CC0 1.0",        cc0: true,
+    info: "Public domain dedication: no conditions." },
+  { id: "by",      name: "CC BY 4.0",      by: true,
+    info: "Credit required; adaptations and commercial use allowed." },
+  { id: "by-sa",   name: "CC BY-SA 4.0",   by: true, sa: true,
+    info: "Adaptations must be shared under the same license (BY-SA)." },
+  { id: "by-nc",   name: "CC BY-NC 4.0",   by: true, nc: true,
+    info: "Non-commercial use only." },
+  { id: "by-nc-sa", name: "CC BY-NC-SA 4.0", by: true, nc: true, sa: true,
+    info: "Non-commercial; adaptations must be shared under the same license (BY-NC-SA)." },
+  { id: "by-nd",   name: "CC BY-ND 4.0",   by: true, nd: true,
+    info: "No adaptations: only the unmodified dataset may be shared." },
+  { id: "by-nc-nd", name: "CC BY-NC-ND 4.0", by: true, nc: true, nd: true,
+    info: "Non-commercial and no adaptations." }
+];
+
+const SOURCE_PAGES = {
+  p_sources: {
+    title: "Which licenses do the source datasets have?",
+    intro: "Tick every license that applies to one or more of the source datasets. The tree uses this to determine which licenses you can use for your dataset. If a source has another or an unknown license, tick the last box.",
+    other: { text: "Another license, no license, or unknown",
+             info: "For example a custom license, an open data license that is not Creative Commons, all rights reserved, or a license you could not determine." },
+    onOther: "e_inherit", onNd: "e_src_nd", onConflict: "e_src_conflict", next: "p_sources_result"
+  }
+};
+
+/* ------------------------------------------------------------------
+   TEXT PAGES - explanatory pages (not shown in the route table).
+   Each: label, title, paragraphs, optional table { head, rows, highlight
+   (row index) }, optional next (adds a Continue button) and optional
+   details { showLabel, hideLabel, paragraphs, table } (extra content that
+   a button shows or hides on the same page).
+------------------------------------------------------------------- */
+const TEXT_PAGES = {
+  // a function creates the page dynamically from the earlier answers
+  p_sources_result: () => sourceResultPage(),
+  p_default_license: {
+    label: "Default license",
+    title: "CC-BY is the default license",
+    paragraphs: [
+      "Deltares publishes datasets under the CC-BY license by default: anyone may reuse the data, provided the source is credited.",
+      "In the next questions we will find out whether there is any reason to deviate from this default license, for example because of a funder requirement, a partner agreement or a strategic reason."
+    ],
+    details: {
+      showLabel: "Show licenses",
+      hideLabel: "Hide licenses",
+      paragraphs: [
+        "Creative Commons (CC) licenses are built from a few conditions: attribution (BY), non-commercial (NC), share-alike (SA) and no-derivatives (ND). The table shows the license versions that can result from this decision tree. The Deltares default is highlighted.",
+        "Note that ND and SA cannot be combined, because share-alike only applies to adaptations."
+      ],
+      table: {
+        head: ["License", "Credit required", "Adaptations allowed", "Commercial use", "Additional condition"],
+        rows: [
+          ["CC0",           "No",  "Yes", "Yes", "None: public domain dedication"],
+          ["CC BY",         "Yes", "Yes", "Yes", "None (Deltares default)"],
+          ["CC BY-SA",      "Yes", "Yes", "Yes", "Adaptations must be shared under the same license"],
+          ["CC BY-NC",      "Yes", "Yes", "No",  "Non-commercial use only"],
+          ["CC BY-NC-SA",   "Yes", "Yes", "No",  "Non-commercial; adaptations under the same license"],
+          ["CC BY-ND",      "Yes", "No",  "Yes", "Only the unmodified dataset may be shared"],
+          ["CC BY-NC-ND",   "Yes", "No",  "No",  "Non-commercial; only the unmodified dataset may be shared"]
+        ],
+        highlight: 1
+      }
+    },
+    next: "q5"
+  }
+};
+
+/* Text of the information shown under each question (drafts - please review). */
+const INFO = {
+  q1:  "Consider whether the project, funder, or Deltares intends or requires the data to be made publicly available (e.g. open data, FAIR principles), or whether only internal data sharing desirable for reuse and visibility.",
+  q3:   "If this dataset can be considered for the digital services route, it may be published through that channel. Contact the DTC team",
+  q4:   "Consider whether the dataset (e.g. training data, model schematisations, calibration or lookup data) is so valuable or complete that others could use it to rebuild or replace licensed Deltares software. If so, publishing it could undermine the software license. Consult the Data Steward when unsure.",
+  q5:  "Look for the agreed publication and licensing approach in the offer, the contract or the Data Management Plan (DMP). If it is documented, that document is leading.",
+  q7:   "Examples: data bought or downloaded from other organisations, data supplied by clients, or data produced by consortium partners.",
+  q7a: "Having access to third party data is not the same as being allowed to republish it. Check the licence or agreement of the source for publication and sublicensing rights.",
+  q8:  "For instance a dataset that is an extract, aggregation, model output or processed version of one or more other datasets. Note that this can also be a Deltares Dataset",
+  q9:  "By default reusers must give credit (CC-BY). Only deviate if there is a clear reason, for example when attribution is impractical or the data is dedicated to the public domain (CC0).",
+  q10: "Choosing 'Yes' adds the NoDerivatives (ND) condition: others may share the dataset but not adapt or build on it. This limits reuse and is therefore used sparingly.",
+  q11: "Choosing 'Yes' adds the ShareAlike (SA) condition: anyone who publishes a derived dataset must use the same license. Not combinable with NoDerivatives.",
+  q12: "Choosing 'Yes' adds the NonCommercial (NC) condition: reuse for commercial purposes is not allowed. Note that this can make reuse by companies, and by some research partners, unclear."
+};
+
+const OUTCOMES = {
+  e_unsure:     { type: "info", title: "Consult the Data Steward",
+                  text: "It is unclear whether there are blockers to publicly sharing this dataset. Please contact your data steward before continuing." },
+
+  e_nopub:      { type: "info", title: "No publication needed",
+                  text: "Publication of the project data is not intended, required or desired, so no further steps are needed." },
+
+  e_internal_sharing: { type: "info", title: "Unrestricted internal sharing",
+                  text: "There are no blockers to internally sharing this dataset, so you can share this dataset internally without restrictions." },
+
+  e_internal_restricted: { type: "info", title: "Restricted internal sharing",
+                  text: "There are some blockers to internally sharing this dataset, so it can only be shared internally under certain conditions." },
+
+  e_restricted: { type: "stop", title: "Do not publish",
+                  text: "Contractual, client or funder restrictions prevent publication of the data." },
+
+  e_digital_services: { type: "info", title: "Consider digital services route",
+                  text: "This dataset can be considered for publication via the digital services route. Please contact your data steward" },
+
+  e_software_recreate: { type: "stop", title: "Do not publish",
+                  text: "The dataset can be used to recreate licensed Deltares software and is too valuable to share, so publication is not allowed." },
+
+  e_blocked_public: { type: "stop", title: "Do not publish",
+                  text: "One or more blockers apply to publicly sharing this dataset (see the blockers in your route below). The dataset cannot be published." },
+
+  e_blocked_internal: { type: "stop", title: "Do not share internally",
+                  text: "One or more blockers apply to internally sharing this dataset (see the blockers in your route below). The dataset cannot be shared internally." },
+
+  e_noauth:     { type: "stop", title: "Do not publish",
+                  text: "Deltares does not have the authority to publish and license the data." },
+
+  e_default:    { type: "ok",   title: "Publish under the default CC-BY license",
+                  text: "There is no reason to deviate from the default license. Publish the data under CC-BY." },
+
+  e_documented: { type: "ok",   title: "Follow the documented approach",
+                  text: "The publication and licensing approach is already explicitly documented (offer / contract / DMP). Follow that documented approach." },
+
+  e_noperm:     { type: "stop", title: "Do not publish",
+                  text: "Deltares does not have permission to use the third party data in this dataset." },
+
+  e_inherit:    { type: "info", title: "Consult the Data Steward",
+                  text: "A source dataset has a license that is not a standard Creative Commons license, or its license is unknown. The license for this dataset follows from the terms of those sources: please contact your data steward." },
+
+  e_src_nd:     { type: "stop", title: "Do not publish this derived dataset",
+                  text: "A source dataset has a NoDerivatives (ND) license, which does not allow sharing adapted or derived datasets. Ask the rights holder for permission, or share only the unmodified source dataset." },
+
+  e_src_single: { type: "ok", title: "Publish under the license required by the sources",
+                  text: "Given the licenses of the source datasets only one license is possible, so no further questions are needed." },
+
+  e_src_conflict: { type: "stop", title: "Source licenses cannot be combined",
+                  text: "A ShareAlike source (CC BY-SA) requires the derived dataset to be published under CC BY-SA, which is not compatible with a NonCommercial source (BY-NC or BY-NC-SA). Ask a rights holder for permission, or do not combine these sources." },
+
+  e_noattr:     { type: "ok",   title: "Publish without attribution requirement",
+                  text: "There is a reason not to require attribution, so the CC-BY attribution requirement does not apply (e.g. CC0 / public domain dedication)." },
+
+  // the license outcome is composed from the answers, see outcomeOf()
+  e_license:    { type: "ok",   title: "Publish under the selected license",
+                  text: "Publish the data under the license that follows from your answers." },
+
+};
+
+/* ---------------- application logic ---------------- */
+const LICENSE_OUTCOMES = ["e_license", "e_noattr", "e_src_single"]; // outcomes that show the composed license
+const $ = id => document.getElementById(id);
+let history = []; // [{qid, answer, text?, silent?}] - text for pages, silent entries are hidden from the route
+let current = "q1";
+let started = false; // false while the introduction page is shown
+const blockerChecks = {}; // pageId -> array of ticked item ids (ticked = blocker not present)
+let sourceChecks = []; // ticked source license ids on the source licenses page
+
+/* ---- source license logic ---- */
+function licensesById(ids) { return ids.map(id => LICENSES.find(l => l.id === id)).filter(Boolean); }
+
+// Selected source licenses of the current route (null when the source page was not visited)
+function sourceSelection() {
+  const h = history.find(x => x.qid === "p_sources");
+  return h ? h.selected : null;
+}
+
+function sourceFlags(ids) {
+  const src = licensesById(ids);
+  return {
+    nd: src.some(l => l.nd),
+    sa: src.some(l => l.sa),
+    nc: src.some(l => l.nc),
+    onlyCC0: src.every(l => l.cc0),
+    // BY-SA must stay BY-SA, which cannot be combined with a NonCommercial source
+    conflict: src.some(l => l.sa && !l.nc) && src.some(l => l.nc)
+  };
+}
+
+// Why a license cannot be used given the sources (empty string = allowed)
+function licenseProblem(l, f) {
+  if (f.onlyCC0) return "";
+  if (l.cc0) return "A source requires attribution";
+  if (f.sa) {
+    if (!l.sa) return "A source is ShareAlike: adaptations must use the same license";
+    if (l.nd) return "ND is not combinable with ShareAlike";
+    if (!!l.nc !== f.nc) return f.nc ? "A source is NonCommercial" : "NonCommercial cannot be added to ShareAlike material";
+  }
+  if (f.nc && !l.nc) return "A source is NonCommercial";
+  return "";
+}
+
+function allowedLicenses(ids) {
+  const f = sourceFlags(ids);
+  return LICENSES.filter(l => !licenseProblem(l, f));
+}
+
+function sourceResultPage() {
+  const ids = sourceSelection() || [];
+  const f = sourceFlags(ids);
+  const allowed = allowedLicenses(ids);
+  const rows = LICENSES.map(l => {
+    const why = licenseProblem(l, f);
+    return [l.name, why ? "No" : "Yes", why || ""];
+  });
+  const paragraphs = [
+    "Based on the licenses of the source datasets, your dataset can be published under: " + allowed.map(l => l.name).join(", ") + "."
+  ];
+  if (allowed.length === 1) paragraphs.push("Only one license is possible, so no further questions are needed.");
+  else paragraphs.push("In the next questions, answers that would lead to a license that is not allowed are disabled.");
+  if (allowed.some(l => l.nd) && !f.onlyCC0)
+    paragraphs.push("Note: a more restrictive license such as ND on a derived dataset only applies to your own contribution; the source data stays under its own license.");
+  return {
+    label: "Allowed licenses",
+    title: "Licenses you can use for this dataset",
+    paragraphs,
+    table: { head: ["License", "Allowed", "Reason"], rows },
+    next: allowed.length === 1 ? "e_src_single" : "q9"
+  };
+}
+
+// Disabled answers for a question, based on the source licenses
+function disabledAnswers(qid) {
+  const sel = sourceSelection();
+  if (!sel) return {};
+  const allowed = allowedLicenses(sel);
+  const rules = {
+    q9:  { Yes: l => l.cc0, No: l => !l.cc0 },
+    q10: { Yes: l => l.nd,  No: l => !l.nd },
+    q11: { Yes: l => l.sa,  No: l => !l.sa },
+    q12: { Yes: l => l.nc,  No: l => !l.nc }
+  }[qid];
+  const out = {};
+  if (rules) Object.keys(rules).forEach(label => {
+    if (!allowed.some(rules[label])) out[label] = "Not possible because of the licenses of the source datasets";
+  });
+  return out;
+}
+
+function ordinal(qid) { return qid.replace("q", "").toUpperCase(); }
+function textOf(h) { return h.text || QUESTIONS[h.qid].text; }
+function routeOf() { return history.filter(h => !h.silent); }
+
+function appendContent(body, page) {
+  (page.paragraphs || []).forEach(t => {
+    const p = document.createElement("p");
+    p.textContent = t;
+    body.appendChild(p);
+  });
+  if (page.table) {
+    const table = document.createElement("table");
+    const hr = document.createElement("tr");
+    page.table.head.forEach(h => { const th = document.createElement("th"); th.textContent = h; hr.appendChild(th); });
+    const thead = document.createElement("thead");
+    thead.appendChild(hr);
+    const tbody = document.createElement("tbody");
+    page.table.rows.forEach((row, i) => {
+      const tr = document.createElement("tr");
+      if (i === page.table.highlight) tr.className = "hl";
+      row.forEach(v => { const td = document.createElement("td"); td.textContent = v; tr.appendChild(td); });
+      tbody.appendChild(tr);
+    });
+    table.append(thead, tbody);
+    body.appendChild(table);
+  }
+}
+
+function renderText(pageId) {
+  const def = TEXT_PAGES[pageId];
+  const page = typeof def === "function" ? def() : def;
+  $("textLabel").textContent = page.label;
+  $("textTitle").textContent = page.title;
+  const body = $("textBody");
+  body.innerHTML = "";
+  appendContent(body, page);
+  // optional extra content that is shown or hidden on the same page
+  let details = null;
+  if (page.details) {
+    details = document.createElement("div");
+    details.className = "hidden";
+    appendContent(details, page.details);
+    body.appendChild(details);
+  }
+  const actions = $("textActions");
+  actions.innerHTML = "";
+  if (page.next) {
+    const b = document.createElement("button");
+    b.className = "primary";
+    b.textContent = "Continue";
+    b.onclick = () => {
+      history.push({ qid: pageId, silent: true });
+      current = page.next;
+      render();
+    };
+    actions.appendChild(b);
+  }
+  if (details) {
+    const b = document.createElement("button");
+    b.textContent = page.details.showLabel;
+    b.onclick = () => {
+      const hidden = details.classList.toggle("hidden");
+      b.textContent = hidden ? page.details.showLabel : page.details.hideLabel;
+    };
+    actions.appendChild(b);
+  }
+}
+// Items that are not ticked are the blockers
+function blockersOf(pageId) {
+  const ticked = blockerChecks[pageId] || [];
+  return BLOCKER_PAGES[pageId].items.filter(i => !ticked.includes(i.id));
+}
+
+function renderBlockers(pageId) {
+  const page = BLOCKER_PAGES[pageId];
+  $("blockersTitle").textContent = page.title;
+  $("blockersIntro").textContent = page.intro;
+  const list = $("blockerList");
+  list.innerHTML = "";
+  const ticked = blockerChecks[pageId] || (blockerChecks[pageId] = []);
+  page.items.forEach(item => {
+    const label = document.createElement("label");
+    label.className = "blocker" + (ticked.includes(item.id) ? " checked" : "");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = ticked.includes(item.id);
+    cb.onchange = () => {
+      const at = ticked.indexOf(item.id);
+      if (cb.checked && at < 0) ticked.push(item.id);
+      if (!cb.checked && at >= 0) ticked.splice(at, 1);
+      label.classList.toggle("checked", cb.checked);
+    };
+    const wrap = document.createElement("span");
+    const t = document.createElement("span");
+    t.className = "b-text";
+    t.textContent = item.text;
+    const i = document.createElement("span");
+    i.className = "b-info";
+    i.textContent = item.info;
+    wrap.append(t, i);
+    label.append(cb, wrap);
+    list.appendChild(label);
+  });
+  $("btnBlockersNext").onclick = () => {
+    const hit = blockersOf(pageId);
+    history.push({ qid: pageId, text: page.title,
+                   answer: hit.length ? hit.map(i => i.short).join("; ") : "No blockers" });
+    current = hit.length ? page.some : page.none;
+    render();
+  };
+}
+
+function renderSources(pageId) {
+  const page = SOURCE_PAGES[pageId];
+  $("sourcesTitle").textContent = page.title;
+  $("sourcesIntro").textContent = page.intro;
+  const list = $("sourceList");
+  list.innerHTML = "";
+  const update = () => {
+    $("btnSourcesNext").disabled = sourceChecks.length === 0;
+    $("sourcesHint").classList.toggle("hidden", sourceChecks.length > 0);
+  };
+  [...LICENSES, { id: "other", name: page.other.text, info: page.other.info }].forEach(item => {
+    const label = document.createElement("label");
+    label.className = "blocker" + (sourceChecks.includes(item.id) ? " checked" : "");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = sourceChecks.includes(item.id);
+    cb.onchange = () => {
+      const at = sourceChecks.indexOf(item.id);
+      if (cb.checked && at < 0) sourceChecks.push(item.id);
+      if (!cb.checked && at >= 0) sourceChecks.splice(at, 1);
+      label.classList.toggle("checked", cb.checked);
+      update();
+    };
+    const wrap = document.createElement("span");
+    const t = document.createElement("span");
+    t.className = "b-text";
+    t.textContent = item.name;
+    const i = document.createElement("span");
+    i.className = "b-info";
+    i.textContent = item.info;
+    wrap.append(t, i);
+    label.append(cb, wrap);
+    list.appendChild(label);
+  });
+  update();
+  $("btnSourcesNext").onclick = () => {
+    const selected = sourceChecks.slice();
+    const f = sourceFlags(selected.filter(id => id !== "other"));
+    history.push({ qid: pageId, text: page.title, selected,
+                   answer: selected.map(id => id === "other" ? page.other.text : LICENSES.find(l => l.id === id).name).join("; ") });
+    if (selected.includes("other")) current = page.onOther;
+    else if (f.nd) current = page.onNd;
+    else if (f.conflict) current = page.onConflict;
+    else current = page.next;
+    render();
+  };
+}
+
+function render() {
+  const isBlockers = current in BLOCKER_PAGES;
+  const isSources = current in SOURCE_PAGES;
+  const isText = current in TEXT_PAGES;
+  const isQuestion = current in QUESTIONS;
+  const isOutcome = !isBlockers && !isSources && !isText && !isQuestion;
+  $("introCard").classList.toggle("hidden", started);
+  $("blockersCard").classList.toggle("hidden", !started || !isBlockers);
+  $("sourcesCard").classList.toggle("hidden", !started || !isSources);
+  $("textCard").classList.toggle("hidden", !started || !isText);
+  $("questionCard").classList.toggle("hidden", !started || !isQuestion);
+  $("outcomeCard").classList.toggle("hidden", !started || !isOutcome);
+  $("routeCard").classList.toggle("hidden", !started || routeOf().length === 0);
+  if (!started) return;
+
+  if (isBlockers) renderBlockers(current);
+  else if (isSources) renderSources(current);
+  else if (isText) renderText(current);
+  else if (isQuestion) {
+    const q = QUESTIONS[current];
+    $("stepLabel").textContent = "Question " + ordinal(current);
+    $("questionText").textContent = q.text;
+    $("infoText").textContent = INFO[current] || "";
+    $("infoText").classList.toggle("hidden", !INFO[current]);
+    $("bar").style.width = Math.min(100, (history.length / 12) * 100) + "%";
+    const box = $("answers");
+    box.innerHTML = "";
+    const disabled = disabledAnswers(current);
+    answersOf(q).forEach(a => {
+      const b = document.createElement("button");
+      b.textContent = a.label;
+      if (disabled[a.label]) { b.disabled = true; b.title = disabled[a.label]; }
+      else b.onclick = () => answer(a);
+      box.appendChild(b);
+    });
+    const reasons = Object.keys(disabled);
+    if (reasons.length) {
+      $("infoText").textContent = (INFO[current] ? INFO[current] + " " : "") +
+        "Note: '" + reasons.join("' and '") + "' is not available because of the licenses of the source datasets.";
+      $("infoText").classList.remove("hidden");
+    }
+  } else {
+    const o = outcomeOf(current);
+    const card = $("outcomeCard");
+    card.className = "card outcome " + o.type;
+    $("outcomeTitle").textContent = o.title;
+    $("outcomeText").textContent = o.text;
+    const lic = LICENSE_OUTCOMES.includes(current) ? composeLicense() : null;
+    $("outcomeLicense").classList.toggle("hidden", !lic);
+    if (lic) $("outcomeLicense").innerHTML = "";
+    if (lic) {
+      const b = document.createElement("strong");
+      b.textContent = lic.name;
+      $("outcomeLicense").append("Indicative license: ", b);
+      if (lic.warning) {
+        const w = document.createElement("div");
+        w.className = "note";
+        w.textContent = lic.warning;
+        $("outcomeLicense").append(w);
+      }
+    }
+  }
+
+  const body = $("routeBody");
+  body.innerHTML = "";
+  routeOf().forEach((h, i) => {
+    const tr = document.createElement("tr");
+    [i + 1, textOf(h), h.answer].forEach((v, c) => {
+      const td = document.createElement("td");
+      td.textContent = v;
+      if (c === 2) td.className = "ans";
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+}
+
+// Answer on a given question in the current route (or undefined)
+function answerOf(qid) {
+  const h = history.find(x => x.qid === qid);
+  return h && h.answer;
+}
+
+function outcomeOf(id) {
+  if (id !== "e_license") return OUTCOMES[id];
+  const name = composeLicense().name;
+  if (name === "CC BY 4.0") return OUTCOMES.e_default;
+  return { type: "ok", title: "Publish under " + name,
+           text: "Based on your answers the dataset should be published under " + name + "." };
+}
+
+function composeLicense() {
+  const sel = sourceSelection();
+  if (sel) {
+    const allowed = allowedLicenses(sel);
+    if (allowed.length === 1) return { name: allowed[0].name };
+  }
+  const f = sel ? sourceFlags(sel) : { nc: false, sa: false, onlyCC0: false };
+  if (answerOf("q9") === "Yes") return { name: "CC0 1.0" };
+  const nd = answerOf("q10") === "Yes";
+  const sa = answerOf("q11") === "Yes" || (f.sa && !nd);
+  const nc = answerOf("q12") === "Yes" || f.nc;
+  const parts = ["BY"];
+  if (nc) parts.push("NC");
+  if (nd) parts.push("ND");
+  else if (sa) parts.push("SA");
+  const out = { name: "CC " + parts.join("-") + " 4.0" };
+  if (nd && sa) out.warning = "Note: 'no derivatives' and 'share alike' cannot be combined in a CC license; ND takes precedence because derivatives are not allowed.";
+  return out;
+}
+
+// Custom answers if defined, otherwise the default Yes / No
+function answersOf(q) {
+  return q.answers || [ { label: "Yes", next: q.yes }, { label: "No", next: q.no } ];
+}
+
+function answer(a) {
+  history.push({ qid: current, answer: a.label });
+  current = a.next;
+  render();
+}
+
+function back() {
+  if (!history.length) { started = false; render(); return; }
+  current = history.pop().qid;
+  render();
+}
+
+function restart() {
+  history = [];
+  current = "q1";
+  Object.keys(blockerChecks).forEach(k => delete blockerChecks[k]);
+  sourceChecks = [];
+  render();
+}
+
+function exportPdf() {
+  const o = outcomeOf(current);
+  const area = $("printArea");
+  area.innerHTML = "";
+  const add = (tag, text, cls) => { const e = document.createElement(tag); e.textContent = text; if (cls) e.className = cls; area.appendChild(e); return e; };
+
+  add("div", "Deltares", "brand");
+  add("h1", "Data sharing decision tree");
+  add("div", "Generated on " + new Date().toLocaleString("en-GB"), "meta");
+
+  add("h2", "Route and answers");
+  const table = document.createElement("table");
+  table.innerHTML = "<thead><tr><th>#</th><th>Question</th><th>Answer</th></tr></thead>";
+  const tb = document.createElement("tbody");
+  routeOf().forEach((h, i) => {
+    const tr = document.createElement("tr");
+    [i + 1, textOf(h), h.answer].forEach((v, c) => {
+      const td = document.createElement("td"); td.textContent = v; if (c === 2) td.className = "ans"; tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+  table.appendChild(tb);
+  area.appendChild(table);
+
+  add("h2", "Outcome");
+  const out = document.createElement("div");
+  out.className = "out " + o.type;
+  const t = document.createElement("strong"); t.textContent = o.title;
+  const p = document.createElement("p"); p.textContent = o.text;
+  out.append(t, p);
+  if (LICENSE_OUTCOMES.includes(current)) {
+    const lic = composeLicense();
+    const l = document.createElement("p");
+    l.textContent = "Indicative license: " + lic.name + (lic.warning ? " (" + lic.warning + ")" : "");
+    out.appendChild(l);
+  }
+  area.appendChild(out);
+
+  window.print();
+}
+
+$("btnBack").onclick = $("btnBack2").onclick = back;
+$("btnRestart").onclick = $("btnRestart2").onclick = restart;
+document.querySelectorAll(".js-back").forEach(b => b.onclick = back);
+document.querySelectorAll(".js-restart").forEach(b => b.onclick = restart);
+$("btnPdf").onclick = exportPdf;
+$("btnStart").onclick = () => { started = true; render(); };
+render();
+</script>
+</body>
+</html>
